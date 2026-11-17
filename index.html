@@ -73,6 +73,16 @@ progress{width:100%;height:12px}
 .grila2{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:8px 0}
 .grila2 input{width:100px}
 @media (min-width:900px){main{max-width:880px;margin:0 auto}}
+/* harta */
+main.lat{max-width:none !important;padding:0 0 calc(64px + env(safe-area-inset-bottom))}
+#hartaBox{position:relative;width:100%;background:#fff;overflow:hidden}
+#harta{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#harta:active{cursor:grabbing}
+.hctl{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:8px}
+.hctl button{width:44px;height:44px;border-radius:10px;border:1px solid var(--linie);background:rgba(255,255,255,.95);font-size:22px;color:var(--albastru);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.hinfo{position:absolute;left:8px;bottom:8px;right:64px;font-size:12px;color:#333;background:rgba(255,255,255,.85);border-radius:8px;padding:4px 8px;pointer-events:none}
+.hmesaj{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--gri);font-size:15px;pointer-events:none}
+.hbara{position:absolute;left:0;right:0;top:0;height:4px;background:var(--albastru);transform-origin:left;transform:scaleX(0);transition:transform .2s}
 </style>
 </head>
 <body>
@@ -104,7 +114,7 @@ progress{width:100%;height:12px}
   </div>
   <div class="card">
     <h2>Despre</h2>
-    <p class="nota">Aplicația citește geodatabase-uri ArcGIS (.gdb) direct în browser, fără ArcGIS și fără server: datele nu părăsesc telefonul. Generează imagini PNG mari (24.000 px) și planșe PDF pentru tipărire, cu navigare prin clic pe numărul planșei.</p>
+    <p class="nota">Aplicația citește geodatabase-uri ArcGIS (.gdb) direct în browser, fără ArcGIS și fără server: datele nu părăsesc telefonul. Afișează planul pe ecran cu mărire din degete (tab-ul Hartă) și generează imagini PNG mari (24.000 px) și planșe PDF pentru tipărire, cu navigare prin clic pe numărul planșei.</p>
     <p class="nota" id="versiune"></p>
   </div>
 </section>
@@ -142,6 +152,22 @@ progress{width:100%;height:12px}
     <div class="rand"><span>Margine (m)</span><input type="number" id="margine" value="20" inputmode="decimal"></div>
     <button class="btn plin mare" id="btnNumara">Actualizează numărul de obiecte din zonă</button>
     <div class="info" id="infoZona"></div>
+  </div>
+</section>
+
+<!-- ================= HARTA ================= -->
+<section class="tab" id="tab-harta">
+  <div id="hartaBox">
+    <canvas id="harta"></canvas>
+    <div class="hbara" id="hBara"></div>
+    <div class="hmesaj" id="hMesaj">Încărcați o bază de date și alegeți zona.</div>
+    <div class="hctl">
+      <button id="hPlus" title="Mărește">+</button>
+      <button id="hMinus" title="Micșorează">−</button>
+      <button id="hTot" title="Încadrează zona">⤢</button>
+      <button id="hReincarca" title="Redesenează">↻</button>
+    </div>
+    <div class="hinfo" id="hInfo"></div>
   </div>
 </section>
 
@@ -186,6 +212,7 @@ progress{width:100%;height:12px}
   <button data-tab="date" class="activ"><span class="ic">📂</span>Date</button>
   <button data-tab="straturi"><span class="ic">🗂️</span>Straturi</button>
   <button data-tab="zona"><span class="ic">📍</span>Zonă</button>
+  <button data-tab="harta"><span class="ic">🗺️</span>Hartă</button>
   <button data-tab="gen"><span class="ic">🖨️</span>Generare</button>
 </nav>
 

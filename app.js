@@ -27,7 +27,9 @@ function progres(f, m) { $('#progres').value = f; if (m) $('#stare').textContent
 $$('nav button').forEach(b => b.onclick = () => {
   $$('nav button').forEach(x => x.classList.toggle('activ', x === b));
   $$('.tab').forEach(t => t.classList.toggle('activ', t.id === 'tab-' + b.dataset.tab));
+  document.querySelector('main').classList.toggle('lat', b.dataset.tab === 'harta');
   window.scrollTo(0, 0);
+  if (b.dataset.tab === 'harta') hartaActiva();
 });
 function mergiLa(tab) { $(`nav button[data-tab=${tab}]`).click(); }
 
@@ -332,3 +334,136 @@ initStiluri(); restaureazaSetari();
 $('#versiune').textContent = `Versiunea ${VERSIUNE}`;
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
 initGdal().catch(e => log('GDAL: ' + e));   // incarca motorul GDAL in fundal
+
+
+// ------------------------------------------------------------------ tab Harta: vizualizare cu marire din degete
+const HR = { v: null, pachete: null, semn: '', ext: null, snap: null, snapV: null, ptr: new Map(), tmr: null, ultimTap: null, lucreaza: false };
+const cvH = $('#harta'), ctxH = cvH.getContext('2d');
+const dprH = () => Math.min(window.devicePixelRatio || 1, 3);
+
+function dimensiuneHarta() {
+  const box = $('#hartaBox');
+  const h = window.innerHeight - $('header').offsetHeight - $('nav').offsetHeight;
+  box.style.height = Math.max(240, h) + 'px';
+  const W = box.clientWidth, H = box.clientHeight, d = dprH();
+  if (cvH.width !== Math.round(W * d) || cvH.height !== Math.round(H * d)) { cvH.width = Math.round(W * d); cvH.height = Math.round(H * d); return true; }
+  return false;
+}
+const WH = () => [$('#hartaBox').clientWidth, $('#hartaBox').clientHeight];
+function mesajHarta(t) { $('#hMesaj').textContent = t || ''; $('#hMesaj').style.display = t ? 'flex' : 'none'; }
+
+async function hartaActiva() {
+  dimensiuneHarta();
+  if (!GDB.ds) { mesajHarta('Încărcați întâi o bază de date (tab-ul Date).'); return; }
+  const bif = straturiBifate();
+  if (!bif.length) { mesajHarta('Bifați cel puțin un strat (tab-ul Straturi).'); return; }
+  let z;
+  try { z = await determinaZona(); } catch (e) { mesajHarta(e.message); return; }
+  const semn = JSON.stringify([z.ext, bif, UI.stiluri]);
+  if (semn !== HR.semn || !HR.pachete) {
+    if (HR.lucreaza) return;
+    HR.lucreaza = true; mesajHarta('');
+    $('#hInfo').textContent = 'Citesc datele zonei…';
+    try {
+      HR.pachete = await incarcaPachete(bif, UI.stiluri, z.ext, (f, m) => { $('#hBara').style.transform = `scaleX(${f})`; $('#hInfo').textContent = m; });
+    } catch (e) { mesajHarta('Eroare: ' + (e.message || e)); HR.lucreaza = false; return; }
+    $('#hBara').style.transform = 'scaleX(0)';
+    const zonaNoua = !HR.ext || HR.ext.join() !== z.ext.join();
+    HR.ext = z.ext; HR.semn = semn; HR.titlu = z.titlu; HR.lucreaza = false;
+    if (zonaNoua || !HR.v) incadreaza();
+  }
+  if (!HR.pachete.length) mesajHarta('Straturile bifate nu au obiecte în zona aleasă.'); else mesajHarta('');
+  randeazaHarta();
+}
+
+function incadreaza() {
+  const [W, H] = WH(), e = HR.ext;
+  HR.v = { cx: (e[0] + e[2]) / 2, cy: (e[1] + e[3]) / 2, ppm: Math.min(W / (e[2] - e[0]), H / (e[3] - e[1])) * 0.96 };
+}
+function limiteaza() {
+  const [W, H] = WH(), e = HR.ext; if (!e) return;
+  const fit = Math.min(W / (e[2] - e[0]), H / (e[3] - e[1]));
+  HR.v.ppm = Math.max(fit / 4, Math.min(HR.v.ppm, 400));            // max 400 px/m (detaliu de 2,5 mm)
+}
+
+function randeazaHarta() {
+  if (!HR.pachete || !HR.v) return;
+  dimensiuneHarta();
+  const [W, H] = WH(), d = dprH();
+  const t0 = performance.now();
+  const r = randeazaVedere(ctxH, W, H, d, HR.v, HR.pachete, UI.stiluri);
+  // copia ultimei randari: se misca/scaleaza in timpul gesturilor
+  if (!HR.snap) HR.snap = document.createElement('canvas');
+  HR.snap.width = cvH.width; HR.snap.height = cvH.height;
+  HR.snap.getContext('2d').drawImage(cvH, 0, 0);
+  HR.snapV = Object.assign({}, HR.v);
+  const scara = Math.round(1000 / (HR.v.ppm * 0.2646) / 10) * 10;
+  $('#hInfo').textContent = `${HR.titlu || ''} · ≈ 1:${scara.toLocaleString('ro-RO')} · ${r.obiecte.toLocaleString('ro-RO')} obiecte · ${r.etichete} etichete · ${Math.round(performance.now() - t0)} ms`;
+}
+
+function deseneazaCopie() {
+  if (!HR.snap || !HR.snapV) return;
+  const [W, H] = WH(), d = dprH(), v = HR.v, s = HR.snapV, k = v.ppm / s.ppm;
+  const sx0 = s.cx - W / 2 / s.ppm, sy0 = s.cy + H / 2 / s.ppm;
+  const X = (sx0 - (v.cx - W / 2 / v.ppm)) * v.ppm, Y = ((v.cy + H / 2 / v.ppm) - sy0) * v.ppm;
+  ctxH.setTransform(1, 0, 0, 1, 0, 0);
+  ctxH.fillStyle = '#FFFFFF'; ctxH.fillRect(0, 0, cvH.width, cvH.height);
+  ctxH.drawImage(HR.snap, X * d, Y * d, cvH.width * k, cvH.height * k);
+}
+let rafH = 0;
+function miscare() { if (!rafH) rafH = requestAnimationFrame(() => { rafH = 0; deseneazaCopie(); }); }
+function programeazaRandare(ms = 140) { clearTimeout(HR.tmr); HR.tmr = setTimeout(randeazaHarta, ms); }
+
+function zoomLa(f, px, py) {                       // f = factor, (px,py) = punct ecran (CSS px)
+  if (!HR.v) return;
+  const [W, H] = WH(), v = HR.v;
+  const mx = v.cx + (px - W / 2) / v.ppm, my = v.cy - (py - H / 2) / v.ppm;
+  v.ppm *= f; limiteaza();
+  v.cx = mx - (px - W / 2) / v.ppm; v.cy = my + (py - H / 2) / v.ppm;
+}
+const pozitie = ev => { const r = cvH.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+
+cvH.addEventListener('pointerdown', ev => {
+  if (!HR.v) return;
+  try { cvH.setPointerCapture(ev.pointerId); } catch (e) { }
+  const p = pozitie(ev); HR.ptr.set(ev.pointerId, Object.assign(p, { x0: p.x, y0: p.y, t0: performance.now() }));
+  clearTimeout(HR.tmr);
+});
+cvH.addEventListener('pointermove', ev => {
+  if (!HR.ptr.has(ev.pointerId) || !HR.v) return;
+  const prev = HR.ptr.get(ev.pointerId), p = pozitie(ev);
+  if (HR.ptr.size === 1) {
+    HR.v.cx -= (p.x - prev.x) / HR.v.ppm; HR.v.cy += (p.y - prev.y) / HR.v.ppm;
+  } else if (HR.ptr.size === 2) {
+    const [a, b] = [...HR.ptr.values()];
+    const altul = a === prev ? b : a;
+    const d0 = Math.hypot(prev.x - altul.x, prev.y - altul.y), d1 = Math.hypot(p.x - altul.x, p.y - altul.y);
+    const m0 = { x: (prev.x + altul.x) / 2, y: (prev.y + altul.y) / 2 }, m1 = { x: (p.x + altul.x) / 2, y: (p.y + altul.y) / 2 };
+    if (d0 > 0) zoomLa(d1 / d0, m0.x, m0.y);
+    HR.v.cx -= (m1.x - m0.x) / HR.v.ppm; HR.v.cy += (m1.y - m0.y) / HR.v.ppm;
+  }
+  prev.x = p.x; prev.y = p.y;
+  miscare();
+});
+function sfarsitPointer(ev) {
+  const p = HR.ptr.get(ev.pointerId); if (!p) return;
+  HR.ptr.delete(ev.pointerId);
+  const tap = Math.hypot(p.x - p.x0, p.y - p.y0) < 8 && performance.now() - p.t0 < 300;
+  if (tap && HR.ultimTap && performance.now() - HR.ultimTap.t < 350 && Math.hypot(p.x - HR.ultimTap.x, p.y - HR.ultimTap.y) < 30) {
+    zoomLa(2, p.x, p.y); miscare(); HR.ultimTap = null;
+  } else if (tap) HR.ultimTap = { t: performance.now(), x: p.x, y: p.y };
+  if (!HR.ptr.size) programeazaRandare();
+}
+cvH.addEventListener('pointerup', sfarsitPointer);
+cvH.addEventListener('pointercancel', sfarsitPointer);
+cvH.addEventListener('wheel', ev => {
+  if (!HR.v) return; ev.preventDefault();
+  const p = pozitie(ev); zoomLa(Math.exp(-ev.deltaY * 0.0015), p.x, p.y); miscare(); programeazaRandare(220);
+}, { passive: false });
+$('#hPlus').onclick = () => { const [W, H] = WH(); zoomLa(2, W / 2, H / 2); miscare(); programeazaRandare(60); };
+$('#hMinus').onclick = () => { const [W, H] = WH(); zoomLa(0.5, W / 2, H / 2); miscare(); programeazaRandare(60); };
+$('#hTot').onclick = () => { if (HR.ext) { incadreaza(); randeazaHarta(); } };
+$('#hReincarca').onclick = () => { HR.semn = ''; hartaActiva(); };
+window.addEventListener('resize', () => { if ($('#tab-harta').classList.contains('activ') && dimensiuneHarta()) randeazaHarta(); });
+// evita zoom-ul paginii din gesturi pe harta (Safari)
+['gesturestart', 'gesturechange'].forEach(t => cvH.addEventListener(t, e => e.preventDefault()));

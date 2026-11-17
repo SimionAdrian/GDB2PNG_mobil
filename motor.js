@@ -1,7 +1,7 @@
 /* GDB2PNG mobil - motorul de citire si desenare (aceeasi logica ca aplicatia Windows) */
 'use strict';
 
-const VERSIUNE = '1.1';
+const VERSIUNE = '1.2';
 const PX_PDF_MM = 0.25;                 // 1 "px" din simbolizare = 0,25 mm pe hartie
 const PT_PER_PX_PDF = PX_PDF_MM / 25.4 * 72;
 const FORMATE_MM = { A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841], A0: [841, 1189] };
@@ -360,12 +360,13 @@ function deseneazaZona(pen, date, zona, opt = {}) {
 }
 
 // ---- adaptor Canvas (PNG)
-function penCanvas(ctx, ox, oy, ppm, fundal) {
+function penCanvas(ctx, ox, oy, ppm, fundal, scalaLinii = 1) {
   const X = x => (x - ox) * ppm, Y = y => (oy - y) * ppm;
   return {
     strat(st, ob, opt) {
-      const lw = +(st.latime_px ?? 1), cul = st.culoare || '#000', umpl = st.umplere;
-      const dash = DASHES_PX[(st.stil_linie || 'solid').toLowerCase()];
+      const lw = +(st.latime_px ?? 1) * scalaLinii, cul = st.culoare || '#000', umpl = st.umplere;
+      const dash0 = DASHES_PX[(st.stil_linie || 'solid').toLowerCase()];
+      const dash = dash0 && scalaLinii !== 1 ? dash0.map(v => v * Math.max(scalaLinii, 0.4)) : dash0;
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
       const A = ob.filter(o => o.t === 'A'), L = ob.filter(o => o.t === 'L'), P = ob.filter(o => o.t === 'P');
       if (A.length && umpl) {
@@ -382,7 +383,7 @@ function penCanvas(ctx, ox, oy, ppm, fundal) {
         }
         ctx.stroke(); ctx.setLineDash([]);
       }
-      const mk = st.marker ?? 'o', msz = +(st.marime_marker_px ?? 5);
+      const mk = st.marker ?? 'o', msz = +(st.marime_marker_px ?? 5) * Math.max(scalaLinii, 0.5);
       if (P.length && mk && msz > 0 && opt.puncte !== false) {
         ctx.setLineDash([]); ctx.lineWidth = Math.max(0.8, msz / 6); ctx.strokeStyle = cul; ctx.fillStyle = umpl || cul;
         const plin = !!umpl || '.,x+|_'.includes(mk);
@@ -683,4 +684,50 @@ async function randeazaPdf(straturi, stiluri, ext, opt, log, progres) {
   const blob = pdf.output('blob');
   log(`Gata: ${planse.length} planșe ${fmt} ${ori}, scara 1:${scara}, ${(blob.size / 1e6).toFixed(1)} MB`);
   return { blob, plan, n: planse.length };
+}
+
+// ------------------------------------------------------------------ vizualizare pe ecran (tab Harta)
+
+// citeste geometriile straturilor (fara etichete precalculate); etichetele se calculeaza la fiecare vedere
+async function incarcaPachete(straturi, stiluri, bbox, progres) {
+  const ord = straturi.slice().sort((a, b) => ((+stilStrat(stiluri, a).ordine || 50) - (+stilStrat(stiluri, b).ordine || 50)) || a.localeCompare(b));
+  const pachete = [];
+  for (let i = 0; i < ord.length; i++) {
+    const nume = ord[i], st = stilStrat(stiluri, nume); st._z = +st.ordine || 50;
+    const s = GDB.straturi.find(x => x.nume === nume); if (!s) continue;
+    progres && progres(i / ord.length, `Citesc ${nume} (${i + 1}/${ord.length})`);
+    const adn = st.tip === 'adnotare' || (s.campuri.includes('TextString') && s.campuri.includes('Angle'));
+    let cols = adn ? ['TextString', 'Angle', 'Height'] : campuriDinEticheta(st.eticheta);
+    if (!adn && cols.some(c => !s.campuri.includes(c))) { st.eticheta = null; cols = []; }
+    try {
+      const ob = await citesteStrat(nume, bbox, cols.filter(c => s.campuri.includes(c)));
+      if (ob.length) pachete.push({ st, ob, adn });
+    } catch (e) { console.warn(nume, e); }
+  }
+  return pachete;
+}
+
+// deseneaza vederea curenta: centru (cx, cy), ppm = pixeli CSS pe metru
+function randeazaVedere(ctx, W, H, dpr, v, pachete, stiluri) {
+  const gen = general(stiluri);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = gen.fundal || '#FFFFFF'; ctx.fillRect(0, 0, W, H);
+  const ox = v.cx - W / 2 / v.ppm, oy = v.cy + H / 2 / v.ppm;
+  const vedere = [ox, oy - H / v.ppm, ox + W / v.ppm, oy], m = 20 / v.ppm;
+  const inV = o => o.bb[2] >= vedere[0] - m && o.bb[0] <= vedere[2] + m && o.bb[3] >= vedere[1] - m && o.bb[1] <= vedere[3] + m;
+  // grosimile din simbolizare sunt gandite pentru PNG-ul de ~3 px/m (24000 px pe un UAT);
+  // pe ecran se subtiaza cand vedem de departe si se ingroasa putin de aproape
+  const scala = Math.max(0.3, Math.min(1.6, Math.sqrt(v.ppm / 3)));
+  const pen = penCanvas(ctx, ox, oy, v.ppm, null, scala);
+  let etichete = [], n = 0;
+  for (const p of pachete) {
+    const ob = p.ob.filter(inV); if (!ob.length) continue;
+    n += ob.length;
+    if (p.adn) { etichete = etichete.concat(calculeazaAdnotari(ob, p.st, v.ppm, gen)); continue; }
+    pen.strat(p.st, ob, { puncte: v.ppm >= 0.8 });   // de departe simbolurile punctuale se ascund (ar forma benzi)
+    if (p.st.eticheta) etichete = etichete.concat(calculeazaEtichete(ob, p.st, v.ppm, gen, vedere));
+  }
+  if (gen.evita_suprapunerea) etichete = eliminaSuprapuneri(etichete);
+  etichete.sort((a, b) => a.z - b.z).forEach(e => pen.text(e));
+  return { obiecte: n, etichete: etichete.length, vedere };
 }
