@@ -96,7 +96,7 @@ function construiesteLista() {
         <div class="nume">${s.nume} <span class="tip">${TIP_SCURT(s.tip)}</span></div><div class="nr"></div></div>
       <div class="jos">
         ${adn ? '' : `<input type="color" class="cul c-linie" value="${st.culoare || '#000000'}" title="Culoare linie">`}
-        ${areUmpl ? `<div class="umpl"><input type="color" class="cul c-umpl" value="${st.umplere || '#C8C8C8'}" title="Umplere"><div class="x" ${st.umplere ? 'hidden' : ''}>∅</div></div>` : ''}
+        ${areUmpl ? `<div class="umpl"><input type="color" class="cul c-umpl" value="${st.umplere || '#C8C8C8'}" title="Umplere"><div class="x" ${st.umplere ? 'hidden' : ''}>∅</div><button class="sterge" title="Fără umplere" ${st.umplere ? '' : 'hidden'}>✕</button></div>` : ''}
         <button class="tbtn" title="Etichetă">T</button>
         ${adn ? '<span class="nota">adnotări ArcGIS</span>' : `<input type="number" class="grosime" step="0.25" min="0" value="${+(st.latime_px ?? 1)}" inputmode="decimal" title="Grosime (px)">
         <select class="stil">${Object.entries(STILURI_LINIE).map(([k, v]) => `<option value="${v}" ${((st.stil_linie || 'solid') === v) ? 'selected' : ''}>${k}</option>`).join('')}</select>`}
@@ -106,13 +106,12 @@ function construiesteLista() {
     const cl = d.querySelector('.c-linie'); if (cl) cl.oninput = ev => { editabil(s.nume).culoare = ev.target.value.toUpperCase(); salveazaStiluri(); };
     const cu = d.querySelector('.c-umpl');
     if (cu) {
-      const x = d.querySelector('.umpl .x');
-      x.onclick = () => cu.click();
-      cu.oninput = ev => { editabil(s.nume).umplere = ev.target.value.toUpperCase(); x.hidden = true; salveazaStiluri(); };
-      let tmr; const fara = () => { editabil(s.nume).umplere = null; x.hidden = false; salveazaStiluri(); };
-      cu.addEventListener('contextmenu', ev => { ev.preventDefault(); fara(); });
-      cu.addEventListener('touchstart', () => { tmr = setTimeout(fara, 650); }, { passive: true });
-      cu.addEventListener('touchend', () => clearTimeout(tmr));
+      // pătratul de umplere este chiar selectorul de culoare (atingere directă - merge și pe iPhone)
+      const x = d.querySelector('.umpl .x'), sterge = d.querySelector('.umpl .sterge');
+      const seteaza = v => { editabil(s.nume).umplere = v; x.hidden = !!v; sterge.hidden = !v; salveazaStiluri(); };
+      cu.oninput = cu.onchange = ev => seteaza(ev.target.value.toUpperCase());
+      sterge.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); seteaza(null); };
+      cu.addEventListener('contextmenu', ev => { ev.preventDefault(); seteaza(null); });
     }
     const tb = d.querySelector('.tbtn'); coloreazaT(tb, st);
     tb.onclick = () => adn ? null : deschideEticheta(s, tb);

@@ -1,7 +1,7 @@
 /* GDB2PNG mobil - motorul de citire si desenare (aceeasi logica ca aplicatia Windows) */
 'use strict';
 
-const VERSIUNE = '1.0';
+const VERSIUNE = '1.1';
 const PX_PDF_MM = 0.25;                 // 1 "px" din simbolizare = 0,25 mm pe hartie
 const PT_PER_PX_PDF = PX_PDF_MM / 25.4 * 72;
 const FORMATE_MM = { A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841], A0: [841, 1189] };

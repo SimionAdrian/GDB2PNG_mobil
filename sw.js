@@ -1,5 +1,5 @@
 /* GDB2PNG mobil - lucru offline: fisierele aplicatiei se pastreaza in cache */
-const CACHE = 'gdb2png-v1.0';
+const CACHE = 'gdb2png-v1.1';
 const FISIERE = ['./', 'index.html', 'app.js', 'motor.js', 'stiluri_implicite.js', 'manifest.json', 'icon-192.png', 'icon-512.png',
   'lib/jspdf.umd.min.js', 'lib/fflate.min.js', 'lib/DejaVuSans.ttf', 'lib/gdal/gdal3.js', 'lib/gdal/gdal3WebAssembly.wasm.gz', 'lib/gdal/gdal3WebAssembly.data.gz'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FISIERE)).then(() => self.skipWaiting())); });
