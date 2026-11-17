@@ -505,14 +505,32 @@ async function identificaLa(px, py) {
   ascundeRezultate();
   const [W, H] = WH(), v = HR.v;
   const mx = v.cx + (px - W / 2) / v.ppm, my = v.cy - (py - H / 2) / v.ppm;
-  const r = identifica(HR.pachete, mx, my, 10 / v.ppm);
-  if (!r) { inchideFisa(); return; }
+  const toate = identificaToate(HR.pachete, mx, my, 12 / v.ppm);
+  if (!toate.length) { inchideFisa(); return; }
+  const vazute = new Set();                       // un singur obiect pe strat (cel mai potrivit)
+  HR.candidati = toate.filter(c => !vazute.has(c.p.nume) && vazute.add(c.p.nume)).slice(0, 10);
+  alegeCandidat(0);
+}
+// fisa obiectului k din lista "obiecte aici"; butoanele permit trecerea la celelalte
+async function alegeCandidat(k) {
+  const r = HR.candidati[k]; if (!r) return;
   HR.sel = { nume: r.p.nume, ob: r.o };
   randeazaHarta();
   aratFisa(r.p.nume, null, true);
+  aratAlte(k);
   const tok = (HR.tokFisa = (HR.tokFisa || 0) + 1);
-  try { const pr = await atributeObiect(r.p.nume, r.o); if (tok === HR.tokFisa) aratFisa(r.p.nume, pr); }
-  catch (e) { if (tok === HR.tokFisa) aratFisa(r.p.nume, r.o.p); }
+  let pr;
+  try { pr = await atributeObiect(r.p.nume, r.o); } catch (e) { pr = r.o.p; }
+  if (tok === HR.tokFisa) { aratFisa(r.p.nume, pr); aratAlte(k); }
+}
+function aratAlte(k) {
+  const box = $('#hAlte'); box.innerHTML = '';
+  if (!HR.candidati || HR.candidati.length < 2) return;
+  const s = document.createElement('span'); s.textContent = 'Obiecte aici:'; box.appendChild(s);
+  HR.candidati.forEach((c, i) => {
+    const b = document.createElement('button'); b.textContent = c.p.nume; if (i === k) b.className = 'activ';
+    b.onclick = () => alegeCandidat(i); box.appendChild(b);
+  });
 }
 
 function zoomLaObiect(o) {
@@ -551,7 +569,7 @@ $('#hFormCauta').onsubmit = async ev => {
     const { princ, loc } = rezumat(r, cuv);
     d.innerHTML = '<b></b> <span></span><small></small>';
     d.children[0].textContent = r.nume; d.children[1].textContent = princ; d.children[2].textContent = loc || '';
-    d.onclick = () => { ascundeRezultate(); HR.sel = { nume: r.nume, ob: r.ob }; zoomLaObiect(r.ob); aratFisa(r.nume, r.ob.p); };
+    d.onclick = () => { ascundeRezultate(); HR.candidati = null; $('#hAlte').innerHTML = ''; HR.sel = { nume: r.nume, ob: r.ob }; zoomLaObiect(r.ob); aratFisa(r.nume, r.ob.p); };
     box.appendChild(d);
   }
 };

@@ -99,6 +99,10 @@ main.lat{max-width:none !important;padding:0 0 calc(64px + env(safe-area-inset-b
 .hfisa td{padding:5px 4px;border-bottom:1px solid #EEF0F2;vertical-align:top}
 .hfisa td:first-child{color:var(--gri);width:42%;word-break:break-word}
 .hfisa .butoane{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.halte{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px;align-items:center}
+.halte span{font-size:12px;color:var(--gri)}
+.halte button{border:1px solid var(--linie);border-radius:14px;padding:5px 10px;font-size:13px;background:var(--deschis);color:#1B1F24}
+.halte button.activ{background:var(--albastru);color:#fff;border-color:var(--albastru)}
 </style>
 </head>
 <body>
@@ -191,6 +195,7 @@ main.lat{max-width:none !important;padding:0 0 calc(64px + env(safe-area-inset-b
     <div class="hrez" id="hRez"></div>
     <div class="hfisa" id="hFisa">
       <h3 id="hFisaTitlu"></h3>
+      <div class="halte" id="hAlte"></div>
       <table id="hFisaTabel"></table>
       <div class="butoane"><button class="btn mic" id="hCentreaza">Centrează</button><button class="btn mic plin" id="hInchideFisa">Închide</button></div>
     </div>
