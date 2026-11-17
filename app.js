@@ -505,7 +505,7 @@ async function identificaLa(px, py) {
   ascundeRezultate();
   const [W, H] = WH(), v = HR.v;
   const mx = v.cx + (px - W / 2) / v.ppm, my = v.cy - (py - H / 2) / v.ppm;
-  const toate = identificaToate(HR.pachete, mx, my, 12 / v.ppm);
+  const toate = identificaToate(HR.pachete, mx, my, 12 / v.ppm, 32 / v.ppm);
   if (!toate.length) { inchideFisa(); return; }
   const vazute = new Set();                       // un singur obiect pe strat (cel mai potrivit)
   HR.candidati = toate.filter(c => !vazute.has(c.p.nume) && vazute.add(c.p.nume)).slice(0, 10);

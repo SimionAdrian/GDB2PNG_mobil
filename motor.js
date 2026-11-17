@@ -1,7 +1,7 @@
 /* GDB2PNG mobil - motorul de citire si desenare (aceeasi logica ca aplicatia Windows) */
 'use strict';
 
-const VERSIUNE = '1.4';
+const VERSIUNE = '1.5';
 const PX_PDF_MM = 0.25;                 // 1 "px" din simbolizare = 0,25 mm pe hartie
 const PT_PER_PX_PDF = PX_PDF_MM / 25.4 * 72;
 const FORMATE_MM = { A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841], A0: [841, 1189] };
@@ -819,27 +819,28 @@ function identifica(pachete, mx, my, tol) {
 
 // straturi-reper (limite mari): la atingere trec la final
 const STRATURI_REPER = /^(LimitaUAT|LimitaIntravilan|ZonaProtectie|Plansa|LimitaParcela)/i;
-// toate obiectele de sub deget, in ordinea de prioritate (unul pe obiect)
-function identificaToate(pachete, mx, my, tol) {
-  const cand = [];
+// toate obiectele din jurul degetului: cele de sub deget (tolPrimar) primele, apoi cele din apropiere (tolLista)
+// si suprafetele care contin punctul; stratul de deasupra are prioritate, limitele-reper la final
+function identificaToate(pachete, mx, my, tolPrimar, tolLista = tolPrimar) {
+  const cand = [], T = Math.max(tolPrimar, tolLista);
   for (const p of pachete) {
     if (p.adn) continue;
     for (const o of p.ob) {
-      if (o.bb[0] > mx + tol * 2 || o.bb[2] < mx - tol * 2 || o.bb[1] > my + tol * 2 || o.bb[3] < my - tol * 2) continue;
+      if (o.bb[0] > mx + T * 1.5 || o.bb[2] < mx - T * 1.5 || o.bb[1] > my + T * 1.5 || o.bb[3] < my - T * 1.5) continue;
       if (o.t === 'P') {
         let dm = Infinity;
         for (const a of o.parti) for (let i = 0; i < a.length; i += 2) dm = Math.min(dm, Math.hypot(a[i] - mx, a[i + 1] - my));
-        if (dm <= tol * 1.5) cand.push({ p, o, cls: 0, d: dm });
+        if (dm <= T) cand.push({ p, o, cls: 0, d: dm, aproape: dm <= tolPrimar * 1.5 });
       } else {
         let dm = Infinity;
         for (const a of o.parti) for (let i = 0; i + 3 < a.length; i += 2) dm = Math.min(dm, distSegment(mx, my, a[i], a[i + 1], a[i + 2], a[i + 3]));
-        if (dm <= tol) cand.push({ p, o, cls: 1, d: dm });
-        else if (o.t === 'A' && inPoligon(mx, my, o)) cand.push({ p, o, cls: 2, d: 0 });
+        if (dm <= T) cand.push({ p, o, cls: 1, d: dm, aproape: dm <= tolPrimar });
+        else if (o.t === 'A' && inPoligon(mx, my, o)) cand.push({ p, o, cls: 2, d: 0, aproape: true });
       }
     }
   }
   const reper = c => STRATURI_REPER.test(c.p.nume) ? 1 : 0;
-  cand.sort((a, b) => reper(a) - reper(b) || a.cls - b.cls || (b.p.st._z - a.p.st._z) || a.d - b.d);
+  cand.sort((a, b) => (b.aproape - a.aproape) || reper(a) - reper(b) || a.cls - b.cls || (b.p.st._z - a.p.st._z) || a.d - b.d);
   return cand;
 }
 
