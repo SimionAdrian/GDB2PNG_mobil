@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F4E79">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GDB2PNG">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<title>GDB2PNG mobil</title>
+<style>
+:root{--albastru:#1F4E79;--deschis:#E8F0F8;--gri:#6B7280;--linie:#D7DCE2;--rosu:#B42318;--verde:#1E7B34;--fundal:#F4F6F8}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;color:#1B1F24;background:var(--fundal)}
+header{position:sticky;top:0;z-index:5;background:var(--albastru);color:#fff;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px}
+header h1{margin:0;font-size:17px;font-weight:600}
+header .sub{font-size:12px;opacity:.85;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{padding:12px 12px calc(84px + env(safe-area-inset-bottom))}
+.tab{display:none}.tab.activ{display:block}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:6;display:flex;background:#fff;border-top:1px solid var(--linie);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:8px 2px 9px;font-size:11px;color:var(--gri);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button .ic{font-size:20px;line-height:22px}
+nav button.activ{color:var(--albastru);font-weight:600}
+.card{background:#fff;border:1px solid var(--linie);border-radius:12px;padding:12px;margin-bottom:12px}
+.card h2{font-size:14px;margin:0 0 8px;color:var(--albastru);text-transform:uppercase;letter-spacing:.03em}
+.rand{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+label.rad{display:flex;align-items:center;gap:8px;padding:6px 0}
+input[type=number],input[type=text],select{font-size:16px;padding:8px;border:1px solid var(--linie);border-radius:8px;background:#fff;min-width:0}
+input[type=number]{width:110px}
+.btn{font-size:15px;padding:10px 14px;border-radius:10px;border:1px solid var(--albastru);background:#fff;color:var(--albastru);font-weight:500}
+.btn.plin{background:var(--albastru);color:#fff}
+.btn.mare{width:100%;padding:14px;font-size:16px;font-weight:600}
+.btn.mic{padding:7px 10px;font-size:13px}
+.btn:disabled{opacity:.45}
+.nota{font-size:12.5px;color:var(--gri);margin:4px 0}
+.info{font-size:13px;color:var(--albastru);margin:6px 0;white-space:pre-line}
+.err{color:var(--rosu)}
+.fisier{display:block;border:2px dashed #9DB4CC;border-radius:12px;padding:18px;text-align:center;color:var(--albastru);background:var(--deschis);font-weight:600}
+.fisier input{display:none}
+/* straturi */
+.unelte{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.strat{background:#fff;border:1px solid var(--linie);border-radius:10px;padding:8px 10px;margin-bottom:6px}
+.strat .sus{display:flex;align-items:center;gap:8px}
+.strat .sus input[type=checkbox]{width:22px;height:22px;flex:none}
+.strat .nume{flex:1;min-width:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strat .tip{font-weight:400;color:var(--gri);font-size:11.5px}
+.strat .nr{font-variant-numeric:tabular-nums;font-size:13px;color:#1B1F24;flex:none}
+.strat .nr.zero{color:#B0B0B0}
+.strat .jos{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap}
+.cul{width:34px;height:30px;border:1px solid #9AA4AF;border-radius:6px;padding:0;background:none;flex:none}
+.cul::-webkit-color-swatch-wrapper{padding:2px}.cul::-webkit-color-swatch{border:none;border-radius:4px}
+.umpl{position:relative;width:34px;height:30px;flex:none}
+.umpl .x{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:#9AA4AF;border:1px dashed #9AA4AF;border-radius:6px;background:#fff}
+.tbtn{width:34px;height:30px;border-radius:6px;border:1px solid #9AA4AF;font-weight:700;background:#EEF0F2;color:#A0A7AF;flex:none}
+.grosime{width:70px !important;padding:6px !important;font-size:15px !important}
+.stil{padding:6px !important;font-size:14px !important;flex:1;min-width:110px}
+.antetzona{font-size:12.5px;color:var(--gri);margin:2px 0 8px}
+progress{width:100%;height:12px}
+#jurnal{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;background:#fff;border:1px solid var(--linie);border-radius:8px;padding:8px;max-height:220px;overflow:auto;white-space:pre-wrap}
+.rezultat a{display:block;margin:6px 0;font-weight:600;color:var(--verde)}
+/* dialog eticheta */
+.fundalmodal{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20;display:none;align-items:flex-end;justify-content:center}
+.fundalmodal.vizibil{display:flex}
+.modal{background:#fff;width:100%;max-width:560px;border-radius:16px 16px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.modal h3{margin:0 0 8px;font-size:16px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.chip{border:1px solid var(--linie);border-radius:14px;padding:5px 10px;font-size:13px;background:var(--deschis)}
+.grila2{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:8px 0}
+.grila2 input{width:100px}
+@media (min-width:900px){main{max-width:880px;margin:0 auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>GDB2PNG mobil</h1>
+  <div class="sub" id="antet">Nicio bază de date încărcată</div>
+</header>
+
+<main>
+<!-- ================= DATE ================= -->
+<section class="tab activ" id="tab-date">
+  <div class="card">
+    <h2>Baza de date</h2>
+    <label class="fisier">📂 Alege geodatabase-ul (.gdb.zip)
+      <input type="file" id="inGdb" accept=".zip,application/zip">
+    </label>
+    <p class="nota">Pe telefon un folder .gdb nu se poate alege direct. Pe calculator: clic dreapta pe folderul <b>.gdb</b> → <i>Trimitere către → Folder comprimat (zip)</i>, apoi copiați zip-ul pe telefon (iCloud, e-mail, OneDrive…).</p>
+    <div class="info" id="infoGdb"></div>
+  </div>
+  <div class="card">
+    <h2>Simbolizare</h2>
+    <p class="nota">Culorile, grosimile și etichetele se salvează automat în telefon. Puteți prelua simbolizarea din aplicația Windows (<b>stiluri.json</b> sau <b>…_simbolizare.json</b>).</p>
+    <div class="rand">
+      <label class="btn">Importă simbolizare<input type="file" id="inStil" accept=".json,application/json" hidden></label>
+      <button class="btn" id="btnExportStil">Exportă</button>
+      <button class="btn" id="btnResetStil">Implicită</button>
+    </div>
+    <div class="info" id="infoStil"></div>
+  </div>
+  <div class="card">
+    <h2>Despre</h2>
+    <p class="nota">Aplicația citește geodatabase-uri ArcGIS (.gdb) direct în browser, fără ArcGIS și fără server: datele nu părăsesc telefonul. Generează imagini PNG mari (24.000 px) și planșe PDF pentru tipărire, cu navigare prin clic pe numărul planșei.</p>
+    <p class="nota" id="versiune"></p>
+  </div>
+</section>
+
+<!-- ================= STRATURI ================= -->
+<section class="tab" id="tab-straturi">
+  <div class="unelte">
+    <button class="btn mic" data-bif="toate">Toate</button>
+    <button class="btn mic" data-bif="niciunul">Niciunul</button>
+    <button class="btn mic" data-bif="implicite">Implicite</button>
+    <button class="btn mic" id="btnLiniiMinus">Linii −25%</button>
+    <button class="btn mic" id="btnLiniiPlus">Linii +25%</button>
+    <button class="btn mic" id="btnContinue">Toate continue</button>
+  </div>
+  <div class="antetzona" id="antetZona">Nr. obiecte: total</div>
+  <div id="listaStraturi"><p class="nota">Încărcați întâi o bază de date (tab-ul Date).</p></div>
+  <p class="nota">Pătrat 1 = culoare linie · pătrat 2 = umplere (apăsare lungă / ∅ = fără) · T = etichetă · număr = grosime (px) · listă = tip linie.</p>
+</section>
+
+<!-- ================= ZONA ================= -->
+<section class="tab" id="tab-zona">
+  <div class="card">
+    <h2>Zona</h2>
+    <label class="rad"><input type="radio" name="zona" value="tot" checked> Toată extinderea straturilor bifate</label>
+    <label class="rad"><input type="radio" name="zona" value="uat" id="radUat"> UAT</label>
+    <select id="selUat" style="width:100%" disabled></select>
+    <div class="nota" id="infoUat"></div>
+    <label class="rad"><input type="radio" name="zona" value="coord"> Coordonate Stereo 70 (m)</label>
+    <div class="grila2" style="grid-template-columns:auto 1fr auto 1fr">
+      <span>X min</span><input type="number" id="xmin" inputmode="decimal">
+      <span>Y min</span><input type="number" id="ymin" inputmode="decimal">
+      <span>X max</span><input type="number" id="xmax" inputmode="decimal">
+      <span>Y max</span><input type="number" id="ymax" inputmode="decimal">
+    </div>
+    <div class="rand"><span>Margine (m)</span><input type="number" id="margine" value="20" inputmode="decimal"></div>
+    <button class="btn plin mare" id="btnNumara">Actualizează numărul de obiecte din zonă</button>
+    <div class="info" id="infoZona"></div>
+  </div>
+</section>
+
+<!-- ================= GENERARE ================= -->
+<section class="tab" id="tab-gen">
+  <div class="card">
+    <h2>Imagine PNG</h2>
+    <label class="rad"><input type="radio" name="rez" value="latime" checked> Lățime imagine (px)
+      <input type="number" id="latime" value="24000" inputmode="numeric" style="width:120px"></label>
+    <label class="rad"><input type="radio" name="rez" value="scara"> Scara 1:
+      <input type="number" id="scaraPng" value="1000" inputmode="numeric" style="width:100px"> DPI
+      <input type="number" id="dpi" value="200" inputmode="numeric" style="width:80px"></label>
+    <div class="rand"><button class="btn" id="btnDim">Calculează dimensiunea</button></div>
+    <div class="info" id="infoDim"></div>
+    <button class="btn plin mare" id="btnPng">Generează PNG</button>
+  </div>
+  <div class="card">
+    <h2>Print PDF (planșe)</h2>
+    <div class="rand"><span>Format</span>
+      <select id="formatPdf"><option>Auto</option><option>A4</option><option>A3</option><option>A2</option><option>A1</option><option>A0</option></select>
+      <span>Scara 1:</span><input type="number" id="scaraPdf" value="1000" list="scari" inputmode="numeric" style="width:100px">
+      <datalist id="scari"><option>500</option><option>1000</option><option>2000</option><option>2500</option><option>5000</option><option>10000</option></datalist>
+    </div>
+    <label class="rad"><input type="checkbox" id="ansamblu" checked> Pagina de ansamblu (clic pe planșă = deschide planșa)</label>
+    <div class="rand"><span>Grosime linii</span><input type="number" id="grosimePdf" value="100" inputmode="numeric" style="width:90px"><span class="nota">% (100% = 1 px = 0,25 mm)</span></div>
+    <p class="nota">Auto = cea mai mică foaie pe care încape zona; dacă nu încape nici pe A0, se împarte pe planșe A0.</p>
+    <div class="rand"><button class="btn" id="btnPlanse">Calculează planșe</button></div>
+    <div class="info" id="infoPlanse"></div>
+    <button class="btn plin mare" id="btnPdf">Generează PDF</button>
+  </div>
+  <div class="card">
+    <h2>Progres</h2>
+    <progress id="progres" max="1" value="0"></progress>
+    <div class="info" id="stare"></div>
+    <div class="rezultat" id="rezultat"></div>
+    <details><summary class="nota">Jurnal</summary><div id="jurnal"></div></details>
+  </div>
+</section>
+</main>
+
+<nav>
+  <button data-tab="date" class="activ"><span class="ic">📂</span>Date</button>
+  <button data-tab="straturi"><span class="ic">🗂️</span>Straturi</button>
+  <button data-tab="zona"><span class="ic">📍</span>Zonă</button>
+  <button data-tab="gen"><span class="ic">🖨️</span>Generare</button>
+</nav>
+
+<!-- dialog eticheta -->
+<div class="fundalmodal" id="modalEt">
+  <div class="modal">
+    <h3 id="etTitlu">Etichetă</h3>
+    <p class="nota">Un câmp sau un șablon cu câmpuri între acolade, ex. <b>{Material} Dn{Diametru}</b>. Atingeți un câmp pentru a-l adăuga.</p>
+    <input type="text" id="etText" style="width:100%" autocapitalize="off" autocomplete="off" spellcheck="false">
+    <div class="chips" id="etCampuri"></div>
+    <div class="grila2">
+      <span>Înălțime text (m pe teren)</span><input type="number" id="etH" step="0.1" inputmode="decimal">
+      <span>Înălțime minimă (px)</span><input type="number" id="etMin" step="1" inputmode="decimal">
+      <span>Distanța față de linie (m)</span><input type="number" id="etDec" step="0.1" inputmode="decimal">
+      <span>Culoare text</span><input type="color" id="etCul" class="cul">
+    </div>
+    <label class="rad"><input type="checkbox" id="etScurte"> Etichetează și liniile mai scurte decât textul (ex. branșamente)</label>
+    <div class="rand" style="justify-content:flex-end">
+      <button class="btn" id="etFara">Fără etichetă</button>
+      <button class="btn" id="etRenunta">Renunță</button>
+      <button class="btn plin" id="etOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<script src="lib/gdal/gdal3.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/fflate.min.js"></script>
+<script src="stiluri_implicite.js"></script>
+<script src="motor.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+GDB2PNG mobil 1.0 - aplicatie web pentru telefon (iPhone / Android)
+=====================================================================
+
+Ce face
+-------
+Aceleasi functii ca GDB2PNG pentru Windows, direct in browserul telefonului:
+- citeste un geodatabase ArcGIS (.gdb) arhivat ca .zip, fara ArcGIS si fara server
+  (datele raman pe telefon, nu se trimit nicaieri);
+- lista de straturi cu numarul de obiecte (total sau din zona aleasa), culoare linie,
+  umplere, eticheta (inclusiv compusa, ex. {Material} Dn{Diametru}), grosime, tip linie;
+- zona: toata extinderea / UAT (daca exista LimitaUAT cu DenumireUAT) / coordonate Stereo 70;
+- imagine PNG mare (implicit 24000 px) + fisier .pgw de georeferentiere;
+- PDF vectorial pe planse (Auto = cea mai mica foaie; altfel planse A0 la scara aleasa),
+  cu pagina de ansamblu pe care atingeti numarul plansei ca s-o deschideti,
+  link "Plan de ansamblu" inapoi si semne de carte.
+Simbolizarea porneste identica cu cea din aplicatia Windows si se poate importa/exporta
+(stiluri.json sau ..._simbolizare.json).
+
+Meniuri (bara de jos)
+---------------------
+  Date      - alegerea .gdb.zip, import/export simbolizare
+  Straturi  - bife, culori, umplere, T = eticheta, grosime, tip linie, numar obiecte
+  Zona      - toata extinderea / UAT / coordonate, margine, recalcularea numarului de obiecte
+  Generare  - PNG (latime sau scara+DPI) si PDF (format, scara, ansamblu, grosime linii)
+
+PUBLICARE PE GITHUB PAGES (o singura data, ca la DXF2PNG mobil)
+---------------------------------------------------------------
+1. Intrati pe github.com cu contul SimionAdrian -> "New repository"
+   Nume: GDB2PNG_mobil, Public -> Create repository.
+2. In repository: "Add file" -> "Upload files". Trageti in pagina TOT CONTINUTUL
+   folderului GDB2PNG_mobil (fisierele si folderul lib, nu folderul parinte).
+   Toate fisierele au sub 25 MB, deci merg incarcate din browser.
+   -> "Commit changes".
+3. Settings -> Pages -> Source: "Deploy from a branch", Branch: main, folder: / (root) -> Save.
+   Dupa 1-2 minute aplicatia este la:  https://simionadrian.github.io/GDB2PNG_mobil/
+
+PE TELEFON
+----------
+1. Deschideti adresa de mai sus in Safari (iPhone) sau Chrome (Android).
+2. iPhone: butonul Partajare -> "Adauga pe ecranul principal" (Add to Home Screen).
+   Aplicatia apare ca o iconita si functioneaza si fara internet dupa prima deschidere.
+3. Pregatiti geodatabase-ul pe calculator: clic dreapta pe folderul .gdb
+   (ex. BDGISIlfov_v22.gdb) -> Trimitere catre -> Folder comprimat (zip).
+   Copiati BDGISIlfov_v22.gdb.zip pe telefon (iCloud Drive, OneDrive, e-mail...).
+4. In aplicatie: Date -> "Alege geodatabase-ul (.gdb.zip)".
+
+Sfaturi
+-------
+- PNG-urile de 24000 px sunt mari; pe telefon se vad mai usor planșele PDF.
+  Fisierele generate se descarca sau se salveaza cu "Partajeaza / Salveaza in Fisiere".
+- Prima pornire descarca motorul GDAL (cca 11 MB); apoi ramane in telefon.
+- Pentru toata extinderea unui GDB foarte mare, telefonul poate avea nevoie de mult timp
+  si memorie; alegeti de preferinta un UAT sau coordonate.
+- La actualizari: incarcati din nou fisierele in acelasi repository (suprascriere).
