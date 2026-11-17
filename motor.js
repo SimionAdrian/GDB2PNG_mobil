@@ -1,7 +1,7 @@
 /* GDB2PNG mobil - motorul de citire si desenare (aceeasi logica ca aplicatia Windows) */
 'use strict';
 
-const VERSIUNE = '1.2';
+const VERSIUNE = '1.3';
 const PX_PDF_MM = 0.25;                 // 1 "px" din simbolizare = 0,25 mm pe hartie
 const PT_PER_PX_PDF = PX_PDF_MM / 25.4 * 72;
 const FORMATE_MM = { A4: [210, 297], A3: [297, 420], A2: [420, 594], A1: [594, 841], A0: [841, 1189] };
@@ -82,7 +82,8 @@ async function deschideGdb(file, log) {
     const gf = (l.geometryFields || [])[0];
     if (!gf || !gf.type || /^none$/i.test(gf.type)) continue;
     GDB.straturi.push({ nume: l.name, tip: gf.type, extent: gf.extent || null,
-      campuri: (l.fields || []).map(f => f.name), total: totaluri[l.name] ?? l.featureCount ?? null });
+      campuri: (l.fields || []).map(f => f.name), tipuri: Object.fromEntries((l.fields || []).map(f => [f.name, f.type])),
+      total: totaluri[l.name] ?? l.featureCount ?? null });
   }
   const lu = GDB.straturi.find(s => s.nume === 'LimitaUAT');
   if (lu && lu.campuri.includes('DenumireUAT')) {
@@ -701,7 +702,7 @@ async function incarcaPachete(straturi, stiluri, bbox, progres) {
     if (!adn && cols.some(c => !s.campuri.includes(c))) { st.eticheta = null; cols = []; }
     try {
       const ob = await citesteStrat(nume, bbox, cols.filter(c => s.campuri.includes(c)));
-      if (ob.length) pachete.push({ st, ob, adn });
+      if (ob.length) pachete.push({ st, ob, adn, nume });
     } catch (e) { console.warn(nume, e); }
   }
   return pachete;
@@ -730,4 +731,107 @@ function randeazaVedere(ctx, W, H, dpr, v, pachete, stiluri) {
   if (gen.evita_suprapunerea) etichete = eliminaSuprapuneri(etichete);
   etichete.sort((a, b) => a.z - b.z).forEach(e => pen.text(e));
   return { obiecte: n, etichete: etichete.length, vedere };
+}
+
+
+// ------------------------------------------------------------------ cautare si identificare (tab Harta)
+
+const CAMPURI_FARA_CAUTARE = /^(Shape_|FID|OBJECTID|GlobalID|Secvential|ID_)/i;
+function campuriCautare(s) {
+  const r = [];
+  for (const c of s.campuri) {
+    if (CAMPURI_FARA_CAUTARE.test(c)) continue;
+    const t = (s.tipuri || {})[c] || 'String';
+    if (/String/i.test(t)) r.push(`"${c}"`);
+    else if (/^Integer/i.test(t)) r.push(`CAST("${c}" AS CHARACTER(32))`);
+  }
+  return r;
+}
+
+// cauta textul (toate cuvintele) in campurile text/intregi ale straturilor date, in zona bbox
+async function cautaInGdb(text, straturi, bbox, maxPeStrat = 30, maxTotal = 120) {
+  const cuv = text.trim().split(/\s+/).filter(Boolean).map(w => w.replace(/'/g, "''").replace(/[%_]/g, ''));
+  if (!cuv.length) return [];
+  const rez = [];
+  for (const nume of straturi) {
+    const s = GDB.straturi.find(x => x.nume === nume); if (!s) continue;
+    const cc = campuriCautare(s); if (!cc.length) continue;
+    const where = cuv.map(w => '(' + cc.map(c => `${c} ILIKE '%${w}%'`).join(' OR ') + ')').join(' AND ');
+    try {
+      const gj = await ogrGeoJSON(['-spat', ...bbox.map(String), '-limit', String(maxPeStrat), '-sql', `SELECT * FROM "${nume}" WHERE ${where}`]);
+      for (const f of gj.features) {
+        const o = compacteaza(f); if (!o) continue;
+        // potriviri exacte (ex. numar postal "24" fata de "124") primesc prioritate
+        const vals = Object.values(o.p).map(v => valText(v).toLowerCase());
+        const exact = cuv.filter(w => vals.includes(w.toLowerCase())).length;
+        rez.push({ nume, ob: o, exact });
+      }
+    } catch (e) { console.warn('cautare', nume, e); }
+    if (rez.length >= maxTotal) break;
+  }
+  return rez.sort((a, b) => b.exact - a.exact).slice(0, maxTotal);
+}
+
+// toate atributele unui obiect gasit pe harta (cache-ul pastreaza doar campurile etichetei)
+async function atributeObiect(nume, o) {
+  const e = 0.01, bb = [o.bb[0] - e, o.bb[1] - e, o.bb[2] + e, o.bb[3] + e];
+  const gj = await ogrGeoJSON(['-spat', ...bb.map(String), '-sql', `SELECT * FROM "${nume}"`]);
+  let best = null, bd = Infinity;
+  for (const f of gj.features) {
+    const c = compacteaza(f); if (!c) continue;
+    const d = Math.abs(c.bb[0] - o.bb[0]) + Math.abs(c.bb[1] - o.bb[1]) + Math.abs(c.bb[2] - o.bb[2]) + Math.abs(c.bb[3] - o.bb[3]);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best ? best.p : o.p;
+}
+
+function distSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+  let t = L ? ((px - ax) * dx + (py - ay) * dy) / L : 0; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function inPoligon(px, py, o) {
+  let in_ = false;
+  for (const a of o.parti) for (let i = 0, j = a.length - 2; i < a.length; j = i, i += 2)
+    if ((a[i + 1] > py) !== (a[j + 1] > py) && px < (a[j] - a[i]) * (py - a[i + 1]) / (a[j + 1] - a[i + 1]) + a[i]) in_ = !in_;
+  return in_;
+}
+// obiectul de sub deget: intai puncte, apoi linii/contururi, apoi interior de poligon; stratul de deasupra are prioritate
+function identifica(pachete, mx, my, tol) {
+  const cand = [];
+  for (const p of pachete) {
+    if (p.adn) continue;
+    for (const o of p.ob) {
+      if (o.bb[0] > mx + tol * 2 || o.bb[2] < mx - tol * 2 || o.bb[1] > my + tol * 2 || o.bb[3] < my - tol * 2) continue;
+      if (o.t === 'P') {
+        for (const a of o.parti) for (let i = 0; i < a.length; i += 2) { const d = Math.hypot(a[i] - mx, a[i + 1] - my); if (d <= tol * 1.5) cand.push({ p, o, cls: 0, d }); }
+      } else {
+        let dm = Infinity;
+        for (const a of o.parti) for (let i = 0; i + 3 < a.length; i += 2) dm = Math.min(dm, distSegment(mx, my, a[i], a[i + 1], a[i + 2], a[i + 3]));
+        if (dm <= tol) cand.push({ p, o, cls: 1, d: dm });
+        else if (o.t === 'A' && inPoligon(mx, my, o)) cand.push({ p, o, cls: 2, d: 0 });
+      }
+    }
+  }
+  cand.sort((a, b) => a.cls - b.cls || (b.p.st._z - a.p.st._z) || a.d - b.d);
+  return cand[0] || null;
+}
+
+// evidentierea obiectului ales (peste harta)
+function deseneazaSelectie(ctx, W, H, dpr, v, o) {
+  if (!o) return;
+  const ox = v.cx - W / 2 / v.ppm, oy = v.cy + H / 2 / v.ppm;
+  const X = x => (x - ox) * v.ppm, Y = y => (oy - y) * v.ppm;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.setLineDash([]); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const cale = () => { ctx.beginPath(); for (const a of o.parti) { for (let i = 0; i < a.length; i += 2) i ? ctx.lineTo(X(a[i]), Y(a[i + 1])) : ctx.moveTo(X(a[i]), Y(a[i + 1])); if (o.t === 'A') ctx.closePath(); } };
+  if (o.t === 'P') {
+    for (const a of o.parti) for (let i = 0; i < a.length; i += 2) {
+      ctx.beginPath(); ctx.arc(X(a[i]), Y(a[i + 1]), 11, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,200,255,0.30)'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#00A6D6'; ctx.stroke();
+    }
+    return;
+  }
+  if (o.t === 'A') { cale(); ctx.fillStyle = 'rgba(0,200,255,0.22)'; ctx.fill('evenodd'); }
+  cale(); ctx.lineWidth = 9; ctx.strokeStyle = 'rgba(0,200,255,0.45)'; ctx.stroke();
+  cale(); ctx.lineWidth = 2; ctx.strokeStyle = '#00A6D6'; ctx.stroke();
 }

@@ -370,6 +370,7 @@ async function hartaActiva() {
     $('#hBara').style.transform = 'scaleX(0)';
     const zonaNoua = !HR.ext || HR.ext.join() !== z.ext.join();
     HR.ext = z.ext; HR.semn = semn; HR.titlu = z.titlu; HR.lucreaza = false;
+    if (zonaNoua) { inchideFisa(false); ascundeRezultate(); }
     if (zonaNoua || !HR.v) incadreaza();
   }
   if (!HR.pachete.length) mesajHarta('Straturile bifate nu au obiecte în zona aleasă.'); else mesajHarta('');
@@ -392,6 +393,7 @@ function randeazaHarta() {
   const [W, H] = WH(), d = dprH();
   const t0 = performance.now();
   const r = randeazaVedere(ctxH, W, H, d, HR.v, HR.pachete, UI.stiluri);
+  if (HR.sel) deseneazaSelectie(ctxH, W, H, d, HR.v, HR.sel.ob);
   // copia ultimei randari: se misca/scaleaza in timpul gesturilor
   if (!HR.snap) HR.snap = document.createElement('canvas');
   HR.snap.width = cvH.width; HR.snap.height = cvH.height;
@@ -450,8 +452,11 @@ function sfarsitPointer(ev) {
   HR.ptr.delete(ev.pointerId);
   const tap = Math.hypot(p.x - p.x0, p.y - p.y0) < 8 && performance.now() - p.t0 < 300;
   if (tap && HR.ultimTap && performance.now() - HR.ultimTap.t < 350 && Math.hypot(p.x - HR.ultimTap.x, p.y - HR.ultimTap.y) < 30) {
-    zoomLa(2, p.x, p.y); miscare(); HR.ultimTap = null;
-  } else if (tap) HR.ultimTap = { t: performance.now(), x: p.x, y: p.y };
+    clearTimeout(HR.tmrTap); zoomLa(2, p.x, p.y); miscare(); HR.ultimTap = null;
+  } else if (tap) {
+    HR.ultimTap = { t: performance.now(), x: p.x, y: p.y };
+    clearTimeout(HR.tmrTap); HR.tmrTap = setTimeout(() => identificaLa(p.x, p.y), 320);
+  }
   if (!HR.ptr.size) programeazaRandare();
 }
 cvH.addEventListener('pointerup', sfarsitPointer);
@@ -467,3 +472,87 @@ $('#hReincarca').onclick = () => { HR.semn = ''; hartaActiva(); };
 window.addEventListener('resize', () => { if ($('#tab-harta').classList.contains('activ') && dimensiuneHarta()) randeazaHarta(); });
 // evita zoom-ul paginii din gesturi pe harta (Safari)
 ['gesturestart', 'gesturechange'].forEach(t => cvH.addEventListener(t, e => e.preventDefault()));
+
+
+// ------------------------------------------------------------------ atingere pe obiect + cautare
+const fmtVal = v => {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toLocaleString('ro-RO', { maximumFractionDigits: 2 });
+  return String(v).trim() || null;
+};
+function aratFisa(nume, props, incarca) {
+  $('#hFisaTitlu').textContent = nume;
+  const tb = $('#hFisaTabel'); tb.innerHTML = '';
+  if (incarca) { tb.innerHTML = '<tr><td colspan="2">Citesc atributele…</td></tr>'; }
+  else {
+    let goale = 0;
+    for (const [k, v] of Object.entries(props || {})) {
+      const t = fmtVal(v); if (t === null) { goale++; continue; }
+      const tr = document.createElement('tr'); tr.innerHTML = '<td></td><td></td>';
+      tr.children[0].textContent = k; tr.children[1].textContent = t; tb.appendChild(tr);
+    }
+    if (!tb.children.length) tb.innerHTML = '<tr><td colspan="2">Obiectul nu are atribute completate.</td></tr>';
+    if (goale) { const tr = document.createElement('tr'); tr.innerHTML = `<td colspan="2" style="color:#9AA4AF">${goale} câmpuri goale nu sunt afișate</td>`; tb.appendChild(tr); }
+  }
+  $('#hFisa').classList.add('vizibil');
+}
+function inchideFisa(redeseneaza = true) { $('#hFisa').classList.remove('vizibil'); if (HR.sel) { HR.sel = null; if (redeseneaza) randeazaHarta(); } }
+$('#hInchideFisa').onclick = () => inchideFisa();
+$('#hCentreaza').onclick = () => { if (HR.sel) zoomLaObiect(HR.sel.ob); };
+
+async function identificaLa(px, py) {
+  if (!HR.pachete || !HR.v) return;
+  ascundeRezultate();
+  const [W, H] = WH(), v = HR.v;
+  const mx = v.cx + (px - W / 2) / v.ppm, my = v.cy - (py - H / 2) / v.ppm;
+  const r = identifica(HR.pachete, mx, my, 10 / v.ppm);
+  if (!r) { inchideFisa(); return; }
+  HR.sel = { nume: r.p.nume, ob: r.o };
+  randeazaHarta();
+  aratFisa(r.p.nume, null, true);
+  const tok = (HR.tokFisa = (HR.tokFisa || 0) + 1);
+  try { const pr = await atributeObiect(r.p.nume, r.o); if (tok === HR.tokFisa) aratFisa(r.p.nume, pr); }
+  catch (e) { if (tok === HR.tokFisa) aratFisa(r.p.nume, r.o.p); }
+}
+
+function zoomLaObiect(o) {
+  const [W, H] = WH();
+  const w = Math.max(o.bb[2] - o.bb[0], 40), h = Math.max(o.bb[3] - o.bb[1], 40);
+  // fisa acopera jumatatea de jos: obiectul se pune in treimea de sus
+  const ppm = Math.max(1.5, Math.min(12, Math.min(W / (w * 1.6), H * 0.45 / (h * 1.4))));
+  HR.v = { cx: (o.bb[0] + o.bb[2]) / 2, cy: (o.bb[1] + o.bb[3]) / 2 - H * 0.18 / ppm, ppm };
+  randeazaHarta();
+}
+
+function ascundeRezultate() { $('#hRez').classList.remove('vizibil'); }
+function rezumat(r, cuv) {
+  const p = r.ob.p, parti = [];
+  const contine = v => cuv.some(w => v.toLowerCase().includes(w.toLowerCase()));
+  for (const [k, v] of Object.entries(p)) { const t = fmtVal(v); if (t && contine(t) && !/^Shape_/i.test(k)) parti.push(`${k}: ${t}`); }
+  const loc = fmtVal(p.Localitate) || fmtVal(p.LOCALITATE);
+  return { princ: parti.slice(0, 3).join(' · ') || '(potrivire)', loc };
+}
+$('#hFormCauta').onsubmit = async ev => {
+  ev.preventDefault();
+  const text = $('#hCauta').value.trim(); $('#hCauta').blur();
+  const box = $('#hRez');
+  if (!text) { ascundeRezultate(); return; }
+  if (!GDB.ds || !HR.ext) { alert('Încărcați o bază de date și deschideți harta unei zone.'); return; }
+  const bif = straturiBifate();
+  box.innerHTML = '<div class="cap">Caut…</div>'; box.classList.add('vizibil');
+  const tok = (HR.tokCauta = (HR.tokCauta || 0) + 1);
+  const rez = await cautaInGdb(text, bif, HR.ext);
+  if (tok !== HR.tokCauta) return;
+  const cuv = text.split(/\s+/).filter(Boolean);
+  box.innerHTML = `<div class="cap"><span>${rez.length ? rez.length + (rez.length >= 120 ? '+' : '') + ' rezultate în zonă (straturile bifate)' : 'Niciun rezultat în zonă, în straturile bifate'}</span><button class="btn mic" id="hRezInchide">✕</button></div>`;
+  $('#hRezInchide').onclick = ascundeRezultate;
+  for (const r of rez) {
+    const d = document.createElement('div'); d.className = 'r';
+    const { princ, loc } = rezumat(r, cuv);
+    d.innerHTML = '<b></b> <span></span><small></small>';
+    d.children[0].textContent = r.nume; d.children[1].textContent = princ; d.children[2].textContent = loc || '';
+    d.onclick = () => { ascundeRezultate(); HR.sel = { nume: r.nume, ob: r.ob }; zoomLaObiect(r.ob); aratFisa(r.nume, r.ob.p); };
+    box.appendChild(d);
+  }
+};
+$('#hCauta').addEventListener('focus', () => { if ($('#hRez').children.length) $('#hRez').classList.add('vizibil'); });
